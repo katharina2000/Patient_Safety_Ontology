@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Patient Safety Ontology</title>
+    <script src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+    <style type="text/css">
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+        }
+        h1 {
+            text-align: center;
+            margin-top: 20px;
+        }
+        #container {
+            display: flex;
+            justify-content: space-between;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+        #mynetwork {
+            width: 50%;
+            height: 600px;
+            border: 1px solid lightgray;
+        }
+        #controls {
+            width: 45%;
+            display: flex;
+            flex-direction: column;
+            box-sizing: border-box;
+        }
+        button {
+            width: 150px; /* Width of buttons */
+            padding: 8px;
+            margin-bottom: 10px;
+            font-size: 14px;
+            cursor: pointer;
+            align-self: flex-start;
+        }
+        #search {
+            margin-bottom: 10px;
+        }
+        #search input {
+            width: 150px; /* Width of search input matches button width */
+            padding: 8px;
+            font-size: 14px;
+            color: #fff;
+            background-color: #333;
+            border: none;
+            border-radius: 4px;
+        }
+        #autocomplete-container {
+            position: absolute;
+            border: 1px solid #d4d4d4;
+            border-radius: 5px;
+            background-color: #f1f1f1;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        #autocomplete-container div {
+            padding: 8px;
+            cursor: pointer;
+            border-bottom: 1px solid #d4d4d4;
+        }
+        #autocomplete-container div:hover {
+            background-color: #e9e9e9;
+        }
+        #details {
+            background-color: #f9f9f9;
+            border: 1px solid #ddd;
+            padding: 10px;
+            margin-top: 20px;
+            height: auto; /* Adjust height based on content */
+        }
+        #details div {
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Patient Safety Ontology</h1>
+    <div id="container">
+        <!-- Container für die Graph-Visualisierung -->
+        <div id="mynetwork"></div>
+        <!-- Container für die Steuerungselemente und Details -->
+        <div id="controls">
+            <!-- Übersetzen ins Deutsche Button -->
+            <button id="translate-button">Translate into German</button>
+            <!-- Suchfeld für die Knoten im Graphen -->
+            <div id="search">
+                <input type="text" id="search-input" placeholder="Search term" autocomplete="off">
+                <div id="autocomplete-container" class="autocomplete-items"></div>
+            </div>
+            <!-- Container für die Anzeige der Knotendetails -->
+            <div id="details">
+                <h2>Details</h2>
+                <div><strong>Name:</strong> <span id="node-name"></span></div>
+                <div><strong>CUI:</strong> <span id="node-cui"></span></div>
+                <div><strong>PSO:</strong> <span id="node-pso"></span></div>
+                <div><strong>Definition:</strong> <span id="node-definition"></span></div>
+                <div><strong>German:</strong> <span id="node-german"></span></div>
+                <div><strong>Synonyms:</strong> <span id="node-synonyms"></span></div>
+            </div>
+        </div>
+    </div>
+
+<script type="text/javascript">
+    // Initialisiere den Graphen mit den englischen Knoten- und Beziehungsnamen
+    var nodes = new vis.DataSet({{ graph_data['nodes']|tojson }});
+    var edges = new vis.DataSet({{ graph_data['edges']|tojson }});
+
+    var container = document.getElementById('mynetwork');
+    var data = {
+        nodes: nodes,
+        edges: edges
+    };
+    var options = {};
+    var network = new vis.Network(container, data, options);
+
+    // Event-Listener für Klicks auf Knoten im Graph
+    network.on('click', function (params) {
+        var clickedNodeId = params.nodes[0]; // ID des angeklickten Knotens
+        if (clickedNodeId !== undefined) {
+            var node = nodes.get(clickedNodeId); // Informationen des Knotens aus dem Dataset abrufen
+            document.getElementById('node-name').textContent = node.label || '';
+            document.getElementById('node-cui').textContent = node.cui || '';
+            document.getElementById('node-pso').textContent = node.pso || '';
+            document.getElementById('node-definition').textContent = node.definition || '';
+            document.getElementById('node-german').textContent = node.german_label || '';
+            document.getElementById('node-synonyms').textContent = node.synonyms || '';
+        }
+    });
+
+    // Variable, um den Zustand der Übersetzung zu verfolgen
+    var translated = false;
+
+    // Button "Translate into German" oder "Translate into English"
+document.getElementById('translate-button').addEventListener('click', function() {
+    if (!translated) {
+        // Zu Deutsch übersetzen
+        nodes.forEach(function(node) {
+            if (node.german_label) {
+                nodes.update({ id: node.id, label: node.german_label });
+            }
+        });
+        edges.forEach(function(edge) {
+            if (edge.translated_rel_label) { // Korrigierter Schlüsselname
+                edges.update({ id: edge.id, label: edge.translated_rel_label });
+            }
+        });
+        this.textContent = "Translate into English";  // Button-Text ändern
+        translated = true;
+    } else {
+        // Zurück zu Englisch wechseln
+        nodes.forEach(function(node) {
+            nodes.update({ id: node.id, label: node.original_label });
+        });
+        edges.forEach(function(edge) {
+            if (edge.original_rel_label) { // Korrigierter Schlüsselname
+                edges.update({ id: edge.id, label: edge.original_rel_label });
+            }
+        });
+        this.textContent = "Translate into German";  // Button-Text wieder ändern
+        translated = false;
+    }
+});
+
+    // Autocomplete-Funktionalität für das Suchfeld
+    var searchInput = document.getElementById('search-input');
+    var autocompleteContainer = document.getElementById('autocomplete-container');
+
+    searchInput.addEventListener('input', function() {
+        var searchTerm = this.value.toLowerCase();
+        var matchingNodes;
+
+        if (translated) {
+            // Suche nach den deutschen Labels
+            matchingNodes = nodes.get({
+                filter: function (node) {
+                    return node.german_label.toLowerCase().includes(searchTerm);
+                }
+            });
+        } else {
+            // Suche nach den englischen Labels
+            matchingNodes = nodes.get({
+                filter: function (node) {
+                    return node.original_label.toLowerCase().includes(searchTerm);
+                }
+            });
+        }
+
+        autocompleteContainer.innerHTML = '';
+        matchingNodes.forEach(function(node) {
+            var suggestion = document.createElement('div');
+            suggestion.textContent = node.label;
+            suggestion.addEventListener('click', function() {
+                searchInput.value = node.label;
+                autocompleteContainer.innerHTML = '';
+                search();
+            });
+            autocompleteContainer.appendChild(suggestion);
+        });
+    });
+
+    // Suchfunktion zum Finden und Auswählen eines Knotens im Graphen
+    function search() {
+        var searchTerm = searchInput.value.toLowerCase();
+        var foundNode;
+
+        if (translated) {
+            // Suche nach dem deutschen Label
+            foundNode = nodes.get({
+                filter: function (node) {
+                    return node.german_label.toLowerCase().includes(searchTerm);
+                }
+            })[0];
+        } else {
+            // Suche nach dem englischen Label
+            foundNode = nodes.get({
+                filter: function (node) {
+                    return node.original_label.toLowerCase().includes(searchTerm);
+                }
+            })[0];
+        }
+
+        if (foundNode) {
+            network.selectNodes([foundNode.id]);
+            var node = nodes.get(foundNode.id);
+            document.getElementById('node-name').textContent = node.label || '';
+            document.getElementById('node-cui').textContent = node.cui || '';
+            document.getElementById('node-pso').textContent = node.pso || '';
+            document.getElementById('node-definition').textContent = node.definition || '';
+            document.getElementById('node-german').textContent = node.german_label || '';
+            document.getElementById('node-synonyms').textContent = node.synonyms || '';
+        } else {
+            alert('Begriff nicht gefunden.');
+        }
+    }
+</script>
+
+</body>
+</html>
